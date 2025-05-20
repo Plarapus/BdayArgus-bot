@@ -4,7 +4,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 
 // Токен вашего бота
-const token = '7544574662:AAEqQ0srXWqLpwMIz-kb21JGZZ52z5P6t8k';
+const token = 'YOUR_BOT_TOKEN';
 const bot = new TelegramBot(token, { polling: true });
 
 // Набор подписчиков
@@ -20,7 +20,6 @@ function loadBirthdays() {
   fs.createReadStream('birthdays.csv')
     .pipe(csv())
     .on('data', row => {
-      // ожидаемый формат: name=Имя, birthday=DD-MM
       if (row.name && row.birthday && /^\d{1,2}-\d{1,2}$/.test(row.birthday)) {
         birthdays.push({ name: row.name.trim(), birthday: row.birthday.trim() });
       }
@@ -67,12 +66,11 @@ function scheduleDailyCheck() {
   const delay = nextCheck.diff(now);
   setTimeout(() => {
     checkBirthdays();
-    // далее проверка каждые 24 часа
     setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
   }, delay);
 }
 
-// Обработчики команд
+// Команды
 bot.onText(/\/start/, msg => {
   users.add(msg.chat.id);
   bot.sendMessage(msg.chat.id, 'Привет! Я напомню тебе о днях рождения.', { reply_markup: { remove_keyboard: true } });
@@ -107,8 +105,51 @@ bot.onText(/\/list/, msg => {
   }
 });
 
+bot.onText(/\/add (.+) (\d{1,2}-\d{1,2})/, (msg, match) => {
+  const chatId = msg.chat.id;
+  if (!users.has(chatId)) return;
+
+  const name = match[1].trim();
+  const birthday = match[2].trim();
+
+  if (!/^\d{1,2}-\d{1,2}$/.test(birthday)) {
+    return bot.sendMessage(chatId, '⚠️ Неверный формат даты. Используй DD-MM, например: 23-05');
+  }
+
+  // Проверка на дубликаты
+  const isDuplicate = birthdays.some(entry =>
+    entry.name.toLowerCase() === name.toLowerCase() &&
+    entry.birthday === birthday
+  );
+
+  if (isDuplicate) {
+    return bot.sendMessage(chatId, `⚠️ Запись с именем "${name}" и датой "${birthday}" уже существует.`);
+  }
+
+  birthdays.push({ name, birthday });
+  const row = `\n${name},${birthday}`;
+  fs.appendFile('birthdays.csv', row, err => {
+    if (err) {
+      console.error('Ошибка при добавлении в файл:', err);
+      return bot.sendMessage(chatId, '❌ Ошибка при сохранении.');
+    }
+    bot.sendMessage(chatId, `✅ День рождения *${name}* (${birthday}) добавлен.`, { parse_mode: 'Markdown' });
+  });
+});
+
+bot.onText(/\/help/, msg => {
+  const helpText = `
+📌 *Команды:*
+/start — подписаться на уведомления
+/reload — перезагрузить список дней рождений
+/list — ближайшие ДР (7 дней)
+/add Имя ДД-ММ — добавить день рождения
+/help — помощь
+  `;
+  bot.sendMessage(msg.chat.id, helpText, { parse_mode: 'Markdown' });
+});
+
 // Инициализация
 loadBirthdays();
 scheduleDailyCheck();
-
 console.log('Бот запущен и готов к работе.');
