@@ -4,7 +4,7 @@ const fs = require('fs');
 const csv = require('csv-parser');
 
 // Токен вашего бота
-const token = 'YOUR_BOT_TOKEN';
+const token = '7544574662:AAEqQ0srXWqLpwMIz-kb21JGZZ52z5P6t8k';
 const bot = new TelegramBot(token, { polling: true });
 
 // Набор подписчиков
